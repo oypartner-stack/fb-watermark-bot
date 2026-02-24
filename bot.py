@@ -6,7 +6,7 @@ import cloudinary.uploader
 import requests
 
 # ─── الإعدادات ───────────────────────────────────────────
-PAGE_URL = "https://www.facebook.com/profile.php?id=61584143603071&sk=reels_tab"
+PAGE_URL = "https://www.facebook.com/profile.php?id=61584143603071"
 LAST_IDS_FILE = "processed_ids.json"
 COOKIES_FILE = "/tmp/cookies.txt"
 WATERMARK_PUBLIC_ID = "fes_ceel2l"
