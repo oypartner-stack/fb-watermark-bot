@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: fb-watermark-bot
+    env: python
+    buildCommand: "bash build.sh"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
