@@ -95,7 +95,19 @@ for pattern in patterns:
         vid_id = re.sub(r"[^0-9a-zA-Z]", "", url.split("/")[-1] or url.split("/")[-2])
         if vid_id and vid_id not in seen:
             seen.add(vid_id)
-            videos.append({"id": vid_id, "title": "reel", "url": url})
+            # جلب العنوان الحقيقي
+for v in videos:
+    try:
+        title_result = subprocess.run([
+            "yt-dlp", "--get-title", "--no-warnings",
+            "--cookies", COOKIES_FILE,
+            v["url"]
+        ], capture_output=True, text=True, timeout=30)
+        title = title_result.stdout.strip()
+        if title:
+            v["title"] = title
+    except:
+        pass
 
 print(json.dumps(videos[:5]))
 """
