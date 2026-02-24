@@ -2,14 +2,12 @@ import os
 import json
 import subprocess
 import re
-import urllib.request
-from xml.etree import ElementTree as ET
 import cloudinary
 import cloudinary.uploader
 import requests
 
 # ─── الإعدادات ───────────────────────────────────────────
-PAGE_ID = "61584143603071"
+PAGE_URL = "https://www.facebook.com/profile.php?id=61584143603071&sk=reels_tab"
 LAST_IDS_FILE = "processed_ids.json"
 COOKIES_FILE = "/tmp/cookies.txt"
 WATERMARK_PUBLIC_ID = "fes_ceel2l"
@@ -33,100 +31,105 @@ def save_processed_ids(ids):
     with open(LAST_IDS_FILE, "w") as f:
         json.dump(ids[-50:], f)
 
-# ─── جلب الفيديوهات عبر RSS ──────────────────────────────
+# ─── جلب روابط الفيديوهات عبر Selenium ──────────────────
 def get_latest_videos():
-    print("🔍 جلب الفيديوهات عبر RSS...")
+    print("🔍 جلب الفيديوهات عبر Selenium...")
 
-    rss_url = f"https://www.facebook.com/feeds/page.php?id={PAGE_ID}&format=rss20"
+    script = """
+import json
+import time
+import re
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 
-    videos = []
+options = Options()
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-gpu")
+options.add_argument("--window-size=1920,1080")
+options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+driver = webdriver.Chrome(options=options)
+
+# تحميل الـ cookies
+driver.get("https://www.facebook.com")
+time.sleep(2)
+
+cookies = [
+    {"name": "sb",     "value": "5nyvZrV8TpxXzQrXEnpFxhLF", "domain": ".facebook.com"},
+    {"name": "datr",   "value": "5nyvZv0QJ0q28NX27rB16g9z",  "domain": ".facebook.com"},
+    {"name": "c_user", "value": "100069712184627",            "domain": ".facebook.com"},
+    {"name": "xs",     "value": "17%3AZ3V5wuxvl1jQWg%3A2%3A1771862196%3A-1%3A-1%3A%3AAcyA0v2USDmS3jzlm_41LAhgWWM2_NNxyIdknLhPTQ", "domain": ".facebook.com"},
+    {"name": "fr",     "value": "2M0aPQGPMVpMja77j.AWfTe0lOsBohnfT0vGJ6M3Dc0tRDzAE1sAm4N6Ix_ck0zH-QDSE.BpnQ5-..AAA.0.0.BpnQ5-.AWcRFIeuIxl3O5Z1pjwmf9Idaxg", "domain": ".facebook.com"},
+]
+
+for cookie in cookies:
     try:
-        req = urllib.request.Request(
-            rss_url,
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            content = r.read()
+        driver.add_cookie(cookie)
+    except:
+        pass
 
-        root = ET.fromstring(content)
-        items = root.findall('.//item')
-        print(f"✅ RSS: وجدنا {len(items)} عنصر")
+# فتح صفحة الـ Reels
+driver.get("https://www.facebook.com/profile.php?id=61584143603071&sk=reels_tab")
+time.sleep(5)
 
-        for item in items[:5]:
-            link = item.findtext('link') or ''
-            title = item.findtext('title') or 'بدون عنوان'
-            guid = item.findtext('guid') or link
-            description = item.findtext('description') or ''
+# جلب كل الروابط
+page_source = driver.page_source
+driver.quit()
 
-            # استخراج معرّف الفيديو
-            vid_id = None
-            # بحث عن video_id في الرابط
-            match = re.search(r'videos?/(\d+)', link)
-            if match:
-                vid_id = match.group(1)
-            else:
-                match = re.search(r'v=(\d+)', link)
-                if match:
-                    vid_id = match.group(1)
-                else:
-                    # استخدام guid كمعرف
-                    nums = re.sub(r'[^0-9]', '', guid)
-                    if len(nums) > 5:
-                        vid_id = nums[-15:]
+# استخراج روابط الفيديوهات
+patterns = [
+    r'href="(https://www\\.facebook\\.com/reel/[^"]+)"',
+    r'href="(/reel/[^"]+)"',
+    r'"url":"(https://www\\.facebook\\.com/reel/[^"]+)"',
+    r'(https://www\\.facebook\\.com/share/r/[^"\\\\]+)',
+]
 
-            if vid_id and link:
-                videos.append({
-                    "id": vid_id,
-                    "title": title.strip(),
-                    "url": link.strip(),
-                })
-                print(f"  📹 {vid_id} | {title[:40]}")
+videos = []
+seen = set()
+for pattern in patterns:
+    matches = re.findall(pattern, page_source)
+    for m in matches:
+        url = m if m.startswith("http") else "https://www.facebook.com" + m
+        url = url.replace("\\\\u0025", "%").replace("\\\\", "")
+        vid_id = re.sub(r"[^0-9a-zA-Z]", "", url.split("/")[-1] or url.split("/")[-2])
+        if vid_id and vid_id not in seen:
+            seen.add(vid_id)
+            videos.append({"id": vid_id, "title": "رeel", "url": url})
 
+print(json.dumps(videos[:5]))
+"""
+
+    with open("/tmp/selenium_script.py", "w") as f:
+        f.write(script)
+
+    result = subprocess.run(
+        ["python", "/tmp/selenium_script.py"],
+        capture_output=True, text=True, timeout=60
+    )
+
+    print(f"stdout: {result.stdout[:500]}")
+    if result.stderr:
+        print(f"stderr: {result.stderr[:300]}")
+
+    try:
+        lines = result.stdout.strip().split("\n")
+        for line in reversed(lines):
+            if line.startswith("["):
+                videos = json.loads(line)
+                print(f"✅ تم جلب {len(videos)} فيديو")
+                return videos
     except Exception as e:
-        print(f"❌ خطأ RSS: {str(e)[:200]}")
+        print(f"❌ خطأ في تحليل النتائج: {e}")
 
-    # إذا لم ينجح RSS نجرب جلب الفيديو مباشرة عبر yt-dlp مع cookies
-    if not videos:
-        print("🔄 جرب yt-dlp مع cookies...")
-        urls_to_try = [
-            f"https://www.facebook.com/{PAGE_ID}/videos",
-            f"https://www.facebook.com/profile.php?id={PAGE_ID}",
-        ]
-        for url in urls_to_try:
-            result = subprocess.run([
-                "yt-dlp",
-                "--cookies", COOKIES_FILE,
-                "--flat-playlist",
-                "--playlist-items", "1:5",
-                "--print", "%(id)s|%(title)s|%(webpage_url)s",
-                "--no-warnings",
-                url
-            ], capture_output=True, text=True, timeout=60)
-
-            for line in result.stdout.strip().split("\n"):
-                if "|" in line:
-                    parts = line.split("|", 2)
-                    if len(parts) == 3:
-                        vid_id, title, vid_url = parts
-                        if vid_id and vid_url:
-                            videos.append({
-                                "id": vid_id.strip(),
-                                "title": title.strip() or "بدون عنوان",
-                                "url": vid_url.strip(),
-                            })
-
-            if videos:
-                print(f"✅ yt-dlp: تم جلب {len(videos)} فيديو")
-                break
-
-    print(f"📊 إجمالي الفيديوهات: {len(videos)}")
-    return videos
+    return []
 
 # ─── تحميل الفيديو وإضافة القالب ─────────────────────────
 def process_video(video):
-    print(f"⬇️ تحميل: {video['title'][:50]}")
+    print(f"⬇️ تحميل: {video['url']}")
 
-    # تحميل الفيديو
     result = subprocess.run([
         "yt-dlp",
         "--cookies", COOKIES_FILE,
@@ -141,8 +144,6 @@ def process_video(video):
         return None
 
     print("🎨 إضافة القالب الشفاف...")
-
-    # جلب أبعاد الفيديو
     probe = subprocess.run([
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
@@ -159,15 +160,10 @@ def process_video(video):
 
     print(f"📐 أبعاد الفيديو: {w}x{h}")
 
-    # تحميل القالب من Cloudinary
     watermark_url = f"https://res.cloudinary.com/{os.environ['CLOUDINARY_CLOUD_NAME']}/image/upload/{WATERMARK_PUBLIC_ID}.png"
-    subprocess.run(
-        ["wget", "-q", "-O", "/tmp/watermark.png", watermark_url],
-        timeout=30
-    )
+    subprocess.run(["wget", "-q", "-O", "/tmp/watermark.png", watermark_url], timeout=30)
 
-    # إضافة القالب بنفس حجم الفيديو
-    result = subprocess.run([
+    subprocess.run([
         "ffmpeg", "-y",
         "-i", "/tmp/video.mp4",
         "-i", "/tmp/watermark.png",
@@ -175,13 +171,13 @@ def process_video(video):
         "-codec:a", "copy",
         "-preset", "fast",
         "/tmp/output.mp4"
-    ], capture_output=True, text=True, timeout=600)
+    ], timeout=600)
 
     if not os.path.exists("/tmp/output.mp4"):
-        print(f"❌ فشل ffmpeg: {result.stderr[:200]}")
+        print("❌ فشل ffmpeg")
         return None
 
-    print("☁️ رفع الفيديو المعدّل على Cloudinary...")
+    print("☁️ رفع على Cloudinary...")
     upload_result = cloudinary.uploader.upload(
         "/tmp/output.mp4",
         resource_type="video",
@@ -189,7 +185,6 @@ def process_video(video):
         overwrite=True,
     )
 
-    # تنظيف الملفات المؤقتة
     for f in ["/tmp/video.mp4", "/tmp/output.mp4", "/tmp/watermark.png"]:
         if os.path.exists(f):
             os.remove(f)
@@ -224,7 +219,7 @@ else:
     if not new_video:
         print("ℹ️ لا يوجد فيديو جديد")
     else:
-        print(f"🆕 فيديو جديد: {new_video['title'][:60]}")
+        print(f"🆕 فيديو جديد: {new_video['url']}")
         final_url = process_video(new_video)
         if final_url:
             send_to_webhook(final_url, new_video["title"])
