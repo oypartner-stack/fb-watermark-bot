@@ -2,8 +2,8 @@ name: FB Video Bot
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # كل 10 دقائق
-  workflow_dispatch:          # تشغيل يدوي للاختبار
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -17,8 +17,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg chromium-browser chromium-chromedriver
-          pip install yt-dlp cloudinary requests selenium
+          sudo apt-get install -y ffmpeg
+          pip install yt-dlp cloudinary requests selenium webdriver-manager
 
       - name: Write cookies file
         run: |
