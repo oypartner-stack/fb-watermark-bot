@@ -17,8 +17,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          pip install yt-dlp cloudinary requests
+          sudo apt-get install -y ffmpeg chromium-browser chromium-chromedriver
+          pip install yt-dlp cloudinary requests selenium
 
       - name: Write cookies file
         run: |
