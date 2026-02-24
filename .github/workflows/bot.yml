@@ -1,0 +1,34 @@
+name: FB Video Bot
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # كل 10 دقائق
+  workflow_dispatch:          # تشغيل يدوي للاختبار
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install yt-dlp cloudinary requests
+
+      - name: Write cookies file
+        run: |
+          echo "${{ secrets.FB_COOKIES }}" > /tmp/cookies.txt
+
+      - name: Run bot
+        env:
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: |
+          python bot.py
