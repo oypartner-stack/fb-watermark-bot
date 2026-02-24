@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بوت فيديوهات فيسبوك</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #3b82f6;
+    --accent2: #06b6d4;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --glow: rgba(59,130,246,0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* Glow orbs */
+  body::after {
+    content: '';
+    position: fixed;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
+    top: -200px; right: -200px;
+    pointer-events: none;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem 0;
+  }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .logo-icon {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 0 30px rgba(59,130,246,0.4);
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(59,130,246,0.3); }
+    50% { box-shadow: 0 0 40px rgba(59,130,246,0.6); }
+  }
+
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff 30%, var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+
+  /* Status Bar */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    width: fit-content;
+    margin: 0 auto 3rem;
+    font-size: 0.85rem;
+    transition: all 0.3s;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .status-bar.running .status-dot {
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  .status-bar.error .status-dot {
+    background: var(--red);
+    box-shadow: 0 0 10px var(--red);
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.75rem;
+    margin-bottom: 1.5rem;
+    transition: border-color 0.3s;
+  }
+
+  .card:hover { border-color: var(--accent); }
+
+  .card-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .card-title::before {
+    content: '';
+    width: 3px; height: 14px;
+    background: linear-gradient(var(--accent), var(--accent2));
+    border-radius: 2px;
+  }
+
+  /* Form */
+  .form-group { margin-bottom: 1.25rem; }
+
+  label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+  }
+
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+  }
+
+  input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow);
+  }
+
+  input::placeholder { color: var(--muted); opacity: 0.6; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .btn:hover::after { opacity: 0.05; }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.3);
+    width: 100%;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 4px 30px rgba(59,130,246,0.5);
+  }
+
+  .btn-danger {
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: var(--red);
+    width: 100%;
+  }
+
+  .btn-danger:hover {
+    background: rgba(239,68,68,0.25);
+  }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 100%;
+    margin-top: 0.75rem;
+  }
+
+  .btn-outline:hover { border-color: var(--accent); }
+
+  /* Watermark Upload */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: var(--glow);
+  }
+
+  .upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .upload-text { color: var(--muted); font-size: 0.85rem; }
+  .upload-text strong { color: var(--accent); }
+
+  .badge-success {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(16,185,129,0.15);
+    border: 1px solid rgba(16,185,129,0.3);
+    color: var(--green);
+    padding: 0.3rem 0.75rem;
+    border-radius: 100px;
+    font-size: 0.8rem;
+    margin-top: 0.75rem;
+  }
+
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .stat-item {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .stat-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* Logs */
+  .logs-container {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 1rem;
+    max-height: 280px;
+    overflow-y: auto;
+    font-size: 0.82rem;
+    border: 1px solid var(--border);
+  }
+
+  .logs-container::-webkit-scrollbar { width: 4px; }
+  .logs-container::-webkit-scrollbar-track { background: transparent; }
+  .logs-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--surface2);
+    line-height: 1.5;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+
+  .log-entry:last-child { border-bottom: none; }
+
+  .log-time {
+    color: var(--muted);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    padding-top: 2px;
+    direction: ltr;
+  }
+
+  .log-msg { flex: 1; }
+  .log-entry.error .log-msg { color: #fca5a5; }
+  .log-entry.warning .log-msg { color: #fcd34d; }
+
+  .empty-logs {
+    text-align: center;
+    color: var(--muted);
+    padding: 2rem;
+    font-size: 0.85rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 1.4rem; }
+  }
+
+  /* Disabled state */
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">📡</div>
+    </div>
+    <h1>بوت فيديوهات فيسبوك</h1>
+    <p class="subtitle">مراقبة تلقائية · علامة مائية · إرسال فوري</p>
+  </header>
+
+  <!-- Status -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot"></div>
+    <span id="statusText">متوقف</span>
+  </div>
+
+  <!-- Watermark Upload -->
+  <div class="card">
+    <div class="card-title">العلامة المائية</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="watermarkFile" accept=".png">
+      <div class="upload-icon">🖼️</div>
+      <div class="upload-text">
+        <strong>انقر هنا</strong> لرفع صورة PNG الشفافة<br>
+        <small>(يجب أن تكون بصيغة PNG شفافة)</small>
+      </div>
+    </div>
+    <div id="watermarkStatus"></div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="card-title">الإعدادات</div>
+    <div class="form-group">
+      <label>رابط صفحة فيسبوك</label>
+      <input type="text" id="pageUrl" placeholder="https://www.facebook.com/PageName">
+    </div>
+    <div class="form-group">
+      <label>رابط Webhook (Make.com)</label>
+      <input type="text" id="webhookUrl" placeholder="https://hook.eu1.make.com/xxxxx">
+    </div>
+    <div class="form-group">
+      <label>الفحص كل (دقيقة)</label>
+      <input type="number" id="interval" value="10" min="1" max="60">
+    </div>
+    <button class="btn btn-primary" id="startBtn" onclick="startBot()">
+      ▶ تشغيل البوت
+    </button>
+    <button class="btn btn-danger" id="stopBtn" onclick="stopBot()" style="display:none; margin-top: 0.75rem;">
+      ⏹ إيقاف البوت
+    </button>
+  </div>
+
+  <!-- Stats -->
+  <div class="card">
+    <div class="card-title">الإحصائيات</div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-label">آخر فحص</div>
+        <div class="stat-value" id="lastCheck">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">آخر إرسال</div>
+        <div class="stat-value" id="lastSent">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="card">
+    <div class="card-title">السجلات الحية</div>
+    <div class="logs-container" id="logsContainer">
+      <div class="empty-logs">لا توجد سجلات بعد...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let polling = null;
+
+// Upload watermark
+document.getElementById('watermarkFile').addEventListener('change', async function() {
+  const file = this.files[0];
+  if (!file) return;
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res = await fetch('/api/upload-watermark', { method: 'POST', body: form });
+    const data = await res.json();
+    const el = document.getElementById('watermarkStatus');
+    if (data.ok) {
+      el.innerHTML = '<div class="badge-success">✅ تم رفع ' + file.name + ' بنجاح</div>';
+    } else {
+      el.innerHTML = '<div style="color:var(--red);margin-top:.5rem;font-size:.85rem">❌ ' + data.error + '</div>';
+    }
+  } catch(e) {
+    console.error(e);
+  }
+});
+
+// Drag & drop
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('watermarkFile').files = dt.files;
+    document.getElementById('watermarkFile').dispatchEvent(new Event('change'));
+  }
+});
+
+async function startBot() {
+  const pageUrl = document.getElementById('pageUrl').value.trim();
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+  const interval = document.getElementById('interval').value;
+
+  if (!pageUrl || !webhookUrl) {
+    alert('يرجى إدخال جميع الحقول المطلوبة');
+    return;
+  }
+
+  const res = await fetch('/api/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ page_url: pageUrl, webhook_url: webhookUrl, interval })
+  });
+
+  const data = await res.json();
+  if (data.error) {
+    alert('❌ ' + data.error);
+    return;
+  }
+
+  document.getElementById('startBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = 'block';
+  startPolling();
+}
+
+async function stopBot() {
+  await fetch('/api/stop', { method: 'POST' });
+  document.getElementById('startBtn').style.display = 'block';
+  document.getElementById('stopBtn').style.display = 'none';
+}
+
+function startPolling() {
+  if (polling) clearInterval(polling);
+  polling = setInterval(fetchStatus, 3000);
+  fetchStatus();
+}
+
+async function fetchStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    updateUI(data);
+  } catch(e) {}
+}
+
+function updateUI(data) {
+  // Status bar
+  const bar = document.getElementById('statusBar');
+  const txt = document.getElementById('statusText');
+  bar.className = 'status-bar ' + (data.running ? 'running' : '');
+  txt.textContent = data.running ? '● يعمل الآن' : 'متوقف';
+
+  // Stats
+  document.getElementById('lastCheck').textContent = data.last_check || '—';
+  document.getElementById('lastSent').textContent = data.last_sent || '—';
+
+  // Watermark badge
+  if (data.has_watermark && !document.querySelector('.badge-success')) {
+    document.getElementById('watermarkStatus').innerHTML =
+      '<div class="badge-success">✅ العلامة المائية جاهزة</div>';
+  }
+
+  // Buttons sync
+  if (!data.running) {
+    document.getElementById('startBtn').style.display = 'block';
+    document.getElementById('stopBtn').style.display = 'none';
+  }
+
+  // Logs
+  const container = document.getElementById('logsContainer');
+  if (data.logs && data.logs.length > 0) {
+    container.innerHTML = data.logs.map(l => `
+      <div class="log-entry ${l.level}">
+        <span class="log-time">${l.time}</span>
+        <span class="log-msg">${l.msg}</span>
+      </div>
+    `).join('');
+  }
+}
+
+// Initial load
+fetchStatus();
+startPolling();
+</script>
+</body>
+</html>
