@@ -1,10 +1,40 @@
 import os
 import json
 import subprocess
+import re
+import cloudinary
+import cloudinary.uploader
+import requests
 
+# ─── الإعدادات ───────────────────────────────────────────
+LAST_IDS_FILE = "processed_ids.json"
 COOKIES_FILE = "/tmp/cookies.txt"
+WATERMARK_PUBLIC_ID = "fes_ceel2l"
+WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 
-script = """
+cloudinary.config(
+    cloud_name = os.environ["CLOUDINARY_CLOUD_NAME"],
+    api_key    = os.environ["CLOUDINARY_API_KEY"],
+    api_secret = os.environ["CLOUDINARY_API_SECRET"],
+)
+
+# ─── قائمة الفيديوهات المعالجة ───────────────────────────
+def load_processed_ids():
+    try:
+        with open(LAST_IDS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_processed_ids(ids):
+    with open(LAST_IDS_FILE, "w") as f:
+        json.dump(ids[-50:], f)
+
+# ─── جلب روابط الفيديوهات عبر Selenium ──────────────────
+def get_latest_videos():
+    print("🔍 جلب الفيديوهات عبر Selenium...")
+
+    script = """
 import json
 import time
 import re
@@ -47,24 +77,165 @@ time.sleep(8)
 page_source = driver.page_source
 driver.quit()
 
-# البحث عن كل الروابط التي تحتوي على reel أو video أو watch
-all_links = re.findall(r'href="([^"]*(?:reel|video|watch|share)[^"]*)"', page_source)
-print("=== روابط وجدناها ===")
-for l in all_links[:20]:
-    print(l)
+# استخراج روابط الـ reels فقط
+reel_links = re.findall(r'href="(/reel/([0-9]+)/[^"]*)"', page_source)
 
-print("=== انتهى ===")
+videos = []
+seen = set()
+for path, vid_id in reel_links:
+    if vid_id not in seen:
+        seen.add(vid_id)
+        clean_url = "https://www.facebook.com/reel/" + vid_id + "/"
+        videos.append({
+            "id": vid_id,
+            "title": "",
+            "url": clean_url
+        })
+
+print(json.dumps(videos[:5]))
 """
 
-with open("/tmp/selenium_script.py", "w") as f:
-    f.write(script)
+    with open("/tmp/selenium_script.py", "w") as f:
+        f.write(script)
 
-result = subprocess.run(
-    ["python", "/tmp/selenium_script.py"],
-    capture_output=True, text=True, timeout=90
-)
+    result = subprocess.run(
+        ["python", "/tmp/selenium_script.py"],
+        capture_output=True, text=True, timeout=90
+    )
 
-print("STDOUT:")
-print(result.stdout)
-print("STDERR:")
-print(result.stderr[:500])
+    print(f"stdout: {result.stdout[:500]}")
+    if result.stderr:
+        print(f"stderr: {result.stderr[:300]}")
+
+    videos = []
+    try:
+        lines = result.stdout.strip().split("\n")
+        for line in reversed(lines):
+            if line.startswith("["):
+                videos = json.loads(line)
+                break
+    except Exception as e:
+        print(f"❌ خطأ في تحليل النتائج: {e}")
+        return []
+
+    # جلب العنوان الحقيقي لكل فيديو عبر yt-dlp
+    for v in videos:
+        try:
+            title_result = subprocess.run([
+                "yt-dlp", "--get-title", "--no-warnings",
+                "--cookies", COOKIES_FILE,
+                v["url"]
+            ], capture_output=True, text=True, timeout=30)
+            title = title_result.stdout.strip()
+            if title:
+                v["title"] = title
+                print(f"  📹 {v['id']} | {title[:50]}")
+        except:
+            v["title"] = "بدون عنوان"
+
+    print(f"✅ تم جلب {len(videos)} فيديو")
+    return videos
+
+# ─── تحميل الفيديو وإضافة القالب ─────────────────────────
+def process_video(video):
+    print(f"⬇️ تحميل: {video['url']}")
+
+    result = subprocess.run([
+        "yt-dlp",
+        "--cookies", COOKIES_FILE,
+        "-o", "/tmp/video.mp4",
+        "--format", "best[ext=mp4]/best",
+        "--no-warnings",
+        video["url"]
+    ], capture_output=True, text=True, timeout=300)
+
+    if not os.path.exists("/tmp/video.mp4"):
+        print(f"❌ فشل التحميل: {result.stderr[:200]}")
+        return None
+
+    print("🎨 إضافة القالب الشفاف...")
+
+    probe = subprocess.run([
+        "ffprobe", "-v", "quiet",
+        "-print_format", "json",
+        "-show_streams", "/tmp/video.mp4"
+    ], capture_output=True, text=True)
+
+    try:
+        info = json.loads(probe.stdout)
+        vstream = next((s for s in info["streams"] if s["codec_type"] == "video"), None)
+        w = vstream["width"] if vstream else 1080
+        h = vstream["height"] if vstream else 1920
+    except:
+        w, h = 1080, 1920
+
+    print(f"📐 أبعاد الفيديو: {w}x{h}")
+
+    watermark_url = f"https://res.cloudinary.com/{os.environ['CLOUDINARY_CLOUD_NAME']}/image/upload/{WATERMARK_PUBLIC_ID}.png"
+    subprocess.run(["wget", "-q", "-O", "/tmp/watermark.png", watermark_url], timeout=30)
+
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-i", "/tmp/video.mp4",
+        "-i", "/tmp/watermark.png",
+        "-filter_complex", f"[1:v]scale={w}:{h}[wm];[0:v][wm]overlay=0:0",
+        "-codec:a", "copy",
+        "-preset", "fast",
+        "/tmp/output.mp4"
+    ], timeout=600)
+
+    if not os.path.exists("/tmp/output.mp4"):
+        print("❌ فشل ffmpeg")
+        return None
+
+    print("☁️ رفع على Cloudinary...")
+    upload_result = cloudinary.uploader.upload(
+        "/tmp/output.mp4",
+        resource_type="video",
+        public_id="processed_video",
+        overwrite=True,
+    )
+
+    for f in ["/tmp/video.mp4", "/tmp/output.mp4", "/tmp/watermark.png"]:
+        if os.path.exists(f):
+            os.remove(f)
+
+    return upload_result["secure_url"]
+
+# ─── إرسال للـ Webhook ────────────────────────────────────
+def send_to_webhook(video_url, title):
+    print("📤 إرسال للـ Webhook...")
+    response = requests.post(WEBHOOK_URL, json={
+        "video_url": video_url,
+        "title": title
+    }, timeout=30)
+    print(f"✅ تم الإرسال: {response.status_code}")
+
+# ─── التنفيذ الرئيسي ──────────────────────────────────────
+print("🤖 بدء تشغيل البوت...")
+processed_ids = load_processed_ids()
+print(f"📋 فيديوهات معالجة سابقاً: {len(processed_ids)}")
+
+videos = get_latest_videos()
+
+if not videos:
+    print("❌ لم يتم جلب أي فيديو")
+else:
+    new_video = None
+    for v in videos:
+        if v["id"] not in processed_ids:
+            new_video = v
+            break
+
+    if not new_video:
+        print("ℹ️ لا يوجد فيديو جديد")
+    else:
+        print(f"🆕 فيديو جديد: {new_video['url']}")
+        final_url = process_video(new_video)
+        if final_url:
+            send_to_webhook(final_url, new_video["title"])
+            processed_ids.append(new_video["id"])
+            save_processed_ids(processed_ids)
+            print("🎉 اكتمل بنجاح!")
+        else:
+            print("❌ فشلت معالجة الفيديو")
