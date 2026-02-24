@@ -42,6 +42,7 @@ import re
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 options = Options()
 options.add_argument("--headless")
@@ -51,9 +52,9 @@ options.add_argument("--disable-gpu")
 options.add_argument("--window-size=1920,1080")
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-driver = webdriver.Chrome(options=options)
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 
-# تحميل الـ cookies
 driver.get("https://www.facebook.com")
 time.sleep(2)
 
@@ -71,15 +72,12 @@ for cookie in cookies:
     except:
         pass
 
-# فتح صفحة الـ Reels
 driver.get("https://www.facebook.com/profile.php?id=61584143603071&sk=reels_tab")
 time.sleep(5)
 
-# جلب كل الروابط
 page_source = driver.page_source
 driver.quit()
 
-# استخراج روابط الفيديوهات
 patterns = [
     r'href="(https://www\\.facebook\\.com/reel/[^"]+)"',
     r'href="(/reel/[^"]+)"',
@@ -97,7 +95,7 @@ for pattern in patterns:
         vid_id = re.sub(r"[^0-9a-zA-Z]", "", url.split("/")[-1] or url.split("/")[-2])
         if vid_id and vid_id not in seen:
             seen.add(vid_id)
-            videos.append({"id": vid_id, "title": "رeel", "url": url})
+            videos.append({"id": vid_id, "title": "reel", "url": url})
 
 print(json.dumps(videos[:5]))
 """
@@ -144,6 +142,7 @@ def process_video(video):
         return None
 
     print("🎨 إضافة القالب الشفاف...")
+
     probe = subprocess.run([
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
